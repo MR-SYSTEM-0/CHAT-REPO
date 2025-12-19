@@ -3,7 +3,7 @@ from typing import Callable
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import Message
 
-from Radhe import OWNER, nexichat
+from Radhe import OWNER, Radhe
 
 
 def is_admins(func: Callable) -> Callable:
