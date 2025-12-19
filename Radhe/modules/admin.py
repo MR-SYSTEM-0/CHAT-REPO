@@ -1,9 +1,6 @@
 from pyrogram import filters
-from pyrogram.enums import ChatPermissions
-from pyrogram.types import Message
-
+from pyrogram.types import ChatPermissions
 from Radhe import Radhe
-
 
 def get_target_user(message: Message):
     if message.reply_to_message:
