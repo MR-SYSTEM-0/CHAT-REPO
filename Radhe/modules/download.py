@@ -102,44 +102,44 @@ async def callback(_, query: CallbackQuery):
         selected = medias[0]
 
     if not selected:
-        selected = medias[0]
+    selected = medias[0]
 
-    file_url = selected["url"]
-    ext = selected.get("extension", "mp4")
+file_url = selected["url"]
+ext = selected.get("extension", "mp4")
 
-    # ---------- Download file ----------
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
-            tmp_path = tmp.name
-            async with session.get(file_url) as f:
-                while True:
-                    chunk = await f.content.read(65536)
-                    if not chunk:
-                        break
-                    tmp.write(chunk)
+# ---------- Download file ----------
+tmp_path = None
+try:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+        tmp_path = tmp.name
+        async with session.get(file_url) as f:
+            while True:
+                chunk = await f.content.read(65536)
+                if not chunk:
+                    break
+                tmp.write(chunk)
 
-        # ---------- Send ----------
-        if ext == "mp3":
-            await query.message.reply_audio(
-                audio=tmp_path,
-                caption="🎧 **ʜєяє ιѕ үσυя αυ∂ισ**"
-            )
-        elif ext.lower() in ["jpg", "jpeg", "png"]:
-            await query.message.reply_photo(
-                photo=tmp_path,
-                caption="🖼 **ʜєяє ιѕ үσυя ιмαgє**"
-            )
-        else:
-            await query.message.reply_video(
-                video=tmp_path,
-                caption="🎬 **ʜєяє ιѕ үσυя νι∂єσ**"
-            )
+    # ---------- Send ----------
+    if ext == "mp3":
+        await query.message.reply_audio(
+            audio=tmp_path,
+            caption="🎧 **ʜєяє ιѕ үσυя αυ∂ισ**"
+        )
+    elif ext.lower() in ["jpg", "jpeg", "png"]:
+        await query.message.reply_photo(
+            photo=tmp_path,
+            caption="🖼 **ʜєяє ιѕ үσυя ιмαgє**"
+        )
+    else:
+        await query.message.reply_video(
+            video=tmp_path,
+            caption="🎬 **ʜєяє ιѕ үσυя νι∂єσ**"
+        )
 
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        await status.delete()    if not selected:
+finally:
+    if tmp_path and os.path.exists(tmp_path):
+        os.remove(tmp_path)
+    await status.delete() if not selected:
         selected = medias[0]
 
     file_url = selected["url"]
