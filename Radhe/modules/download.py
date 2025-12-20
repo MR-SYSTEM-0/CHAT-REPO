@@ -2,60 +2,142 @@ import os
 import aiohttp
 import tempfile
 
-from pyrogram.types import Message
+from pyrogram import filters
+from pyrogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery
+)
+
 from Radhe import Radhe
 
-API = "https://last-warning.serv00.net/md.php?url={}"
+API = "https://last-warning.serv00.net/md.php?url="
 
-@Radhe.on_cmd("download")
+# =====================================
+# /download (YT / IG / Pinterest)
+# =====================================
+@Radhe.on_message(filters.command("download"))
 async def download(_, message: Message):
     if len(message.command) < 2:
-        return await message.reply_text(
-            "❌ Usage:\n`Radhe download <instagram | pinterest | youtube link>`"
+        return await message.reply_text("❌ **Provide a link**")
+
+    url = message.text.split(None, 1)[1]
+    msg = await message.reply_text("⏳ **Fetching media...**")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(API + url) as r:
+            data = await r.json()
+
+    if data.get("statusCode") != 200 or not data.get("medias"):
+        return await msg.edit("❌ **No media found**")
+
+    # ---------- YouTube ----------
+    if "youtube.com" in url or "youtu.be" in url:
+        buttons = [
+            [
+                InlineKeyboardButton("🎬 360p", callback_data=f"dl|yt|360|{url}"),
+                InlineKeyboardButton("🎬 720p", callback_data=f"dl|yt|720|{url}")
+            ],
+            [
+                InlineKeyboardButton("🎬 1080p", callback_data=f"dl|yt|1080|{url}")
+            ],
+            [
+                InlineKeyboardButton("🎧 MP3", callback_data=f"dl|yt|mp3|{url}")
+            ]
+        ]
+
+        return await msg.edit(
+            "ωнαт ᴅσ уσυ ωαηт ʈσ ∂σ?",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
 
-    url = message.text.split(None, 1)[1].strip()
-    wait = await message.reply_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт")
+    # ---------- Instagram / Pinterest ----------
+    buttons = [
+        [
+            InlineKeyboardButton("⬇️ Download", callback_data=f"dl|sm|best|{url}")
+        ]
+    ]
 
-    try:
-        # ---- Fetch API response ----
-        async with aiohttp.ClientSession() as session:
-            async with session.get(API.format(url), timeout=30) as r:
-                data = await r.json()
+    await msg.edit(
+        "⬇️ **Media found**",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
 
-        if data.get("statusCode") != 200:
-            return await wait.edit("❌ API error.\n contact @candy_caugh")
 
-        medias = data.get("medias", [])
-        if not medias:
-            return await wait.edit("❌ Media not found.")
+# =====================================
+# CALLBACK HANDLER
+# =====================================
+@Radhe.on_callback_query(filters.regex("^dl\\|"))
+async def callback(_, query: CallbackQuery):
+    await query.answer()
+    _, platform, quality, url = query.data.split("|", 3)
 
-        media = medias[0]   # best / first
-        media_url = media["url"]
-        media_type = media.get("type")
-        title = data.get("title", "")
+    status = await query.message.edit_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт")
 
-        # ---- Temp file ----
-        suffix = ".mp4" if media_type == "video" else ".jpg"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp_path = tmp.name
+    async with aiohttp.ClientSession() as session:
+        async with session.get(API + url) as r:
+            data = await r.json()
 
-        # ---- Download actual media ----
-        async with aiohttp.ClientSession() as session:
-            async with session.get(media_url) as r:
-                with open(tmp_path, "wb") as f:
-                    async for chunk in r.content.iter_chunked(10240):
-                        f.write(chunk)
+    medias = data.get("medias", [])
+    if not medias:
+        return await status.edit("❌ **Media not available**")
 
-        await wait.delete()
+    selected = None
 
-        # ---- Send to Telegram ----
-        if media_type == "video":
-            await message.reply_video(video=tmp_path, caption=title)
+    # ---------- YouTube ----------
+    if platform == "yt":
+        if quality == "mp3":
+            for m in medias:
+                if m.get("type") == "audio":
+                    selected = m
+                    break
         else:
-            await message.reply_photo(photo=tmp_path, caption=title)
+            for m in medias:
+                if (
+                    m.get("type") == "video"
+                    and quality in m.get("quality", "")
+                ):
+                    selected = m
+                    break
 
+    # ---------- Instagram / Pinterest ----------
+    else:
+        selected = medias[0]
+
+    if not selected:
+        selected = medias[0]
+
+    file_url = selected["url"]
+    ext = selected.get("extension", "mp4")
+
+    # ---------- Download file ----------
+    with tempfile.NamedTemporaryFile(delete=False, suffix="." + ext) as tmp:
+        tmp_path = tmp.name
+        async with session.get(file_url) as f:
+            while True:
+                chunk = await f.content.read(65536)
+                if not chunk:
+                    break
+                tmp.write(chunk)
+
+    # ---------- Send ----------
+    try:
+        if ext == "mp3":
+            await query.message.reply_audio(
+                audio=tmp_path,
+                caption="🎧 **ʜєяє ιѕ үσυя αυ∂ισ**"
+            )
+        elif ext in ["jpg", "png", "jpeg"]:
+            await query.message.reply_photo(
+                photo=tmp_path,
+                caption="🖼 **ʜєяє ιѕ үσυя ιмαgє**"
+            )
+        else:
+            await query.message.reply_video(
+                video=tmp_path,
+                caption="🎬 **ʜєяє ιѕ үσυя νι∂єσ**"
+            )
+    finally:
         os.remove(tmp_path)
-
-    except Exception as e:
-        await wait.edit(f"❌ Error:\n`{e}`")
+        await status.delete()
