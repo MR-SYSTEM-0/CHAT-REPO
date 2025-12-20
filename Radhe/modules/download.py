@@ -1,24 +1,20 @@
 import aiohttp
-import asyncio
-import io
+from io import BytesIO
 
-from pyrogram import filters
 from pyrogram.types import Message
-
 from Radhe import Radhe
-
 
 API_URL = "https://last-warning.serv00.net/md.php?url="
 
 
 @Radhe.on_cmd("download")
 async def download_video(_, message: Message):
-    if len(message.command) < 2:
+    if not message.text or len(message.text.split()) < 2:
         return await message.reply_text(
             "**❌ ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ʟɪɴᴋ**\n\n`Radhe download <link>`"
         )
 
-    link = message.text.split(None, 2)[2]
+    link = message.text.split(None, 1)[1]
 
     wait_msg = await message.reply_text(
         "đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт 🫶"
@@ -30,15 +26,15 @@ async def download_video(_, message: Message):
                 if resp.status != 200:
                     return await wait_msg.edit("❌ **ғᴀɪʟᴇᴅ ᴛᴏ ғᴇᴛᴄʜ ᴠɪᴅᴇᴏ**")
 
-                video_bytes = await resp.read()
-
-        video_file = io.BytesIO(video_bytes)
-        video_file.name = "radhe_video.mp4"
+                data = await resp.read()
 
         await wait_msg.delete()
 
+        video = BytesIO(data)
+        video.name = "radhe_video.mp4"
+
         await message.reply_video(
-            video=video_file,
+            video=video,
             caption="❤️ **ʜᴇʀᴇ ɪs ʏᴏᴜʀ ᴠɪᴅᴇᴏ**",
         )
 
@@ -47,4 +43,4 @@ async def download_video(_, message: Message):
             await wait_msg.delete()
         except:
             pass
-        await message.reply_text(f"❌ **ᴇʀʀᴏʀ :** `{e}`")
+        await message.reply_text(f"❌ **ᴇʀʀᴏʀ:** `{e}`")
