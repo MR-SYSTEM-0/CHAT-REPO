@@ -15,7 +15,7 @@ async def download(_, message: Message):
         )
 
     url = message.text.split(None, 1)[1].strip()
-    wait = await message.reply_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт"")
+    wait = await message.reply_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт")
 
     try:
         # ---- Fetch API response ----
