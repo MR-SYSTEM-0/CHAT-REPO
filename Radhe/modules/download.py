@@ -1,111 +1,64 @@
 import os
-import tempfile
 import aiohttp
-import aiofiles
+import tempfile
 
-from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-
+from pyrogram.types import Message
 from Radhe import Radhe
 
-API = "https://last-warning.serv00.net/md.php?url="
+API = "https://last-warning.serv00.net/md.php?url={}"
 
-# =====================================
-# /download (YT / IG / Pinterest)
-# =====================================
-@Radhe.on_message(filters.command("download"))
+@Radhe.on_cmd("download")
 async def download(_, message: Message):
     if len(message.command) < 2:
-        return await message.reply_text("❌ **Provide a link**")
-
-    url = message.text.split(None, 1)[1]
-    msg = await message.reply_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт")
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(API + url) as r:
-            data = await r.json()
-
-    if data.get("statusCode") != 200 or not data.get("medias"):
-        return await msg.edit("❌ **No media found**")
-
-    # ---------- YouTube ----------
-    if "youtube.com" in url or "youtu.be" in url:
-        buttons = [
-            [
-                InlineKeyboardButton("🎬 360p", callback_data=f"dl|yt|360|{url}"),
-                InlineKeyboardButton("🎬 720p", callback_data=f"dl|yt|720|{url}")
-            ],
-            [
-                InlineKeyboardButton("🎬 1080p", callback_data=f"dl|yt|1080|{url}")
-            ],
-            [
-                InlineKeyboardButton("🎧 MP3", callback_data=f"dl|yt|mp3|{url}")
-            ]
-        ]
-        return await msg.edit(
-            "ωнαт ᴅσ уσυ ωαηт ʈσ ∂σ?",
-            reply_markup=InlineKeyboardMarkup(buttons)
+        return await message.reply_text(
+            "❌ Usage:\n`Radhe download <instagram | pinterest | youtube link>`"
         )
 
-    # ---------- Instagram / Pinterest ----------
-    buttons = [
-        [
-            InlineKeyboardButton("⬇️ Download", callback_data=f"dl|sm|best|{url}")
-        ]
-    ]
+    url = message.text.split(None, 1)[1].strip()
+    wait = await message.reply_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт"")
 
-    await msg.edit(
-        "⬇️ **Media found**",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+    try:
+        # ---- Fetch API response ----
+        async with aiohttp.ClientSession() as session:
+            async with session.get(API.format(url), timeout=30) as r:
+                data = await r.json()
 
-# =====================================
-# CALLBACK HANDLER
-# =====================================
-@Radhe.on_callback_query(filters.regex("^dl\\|"))
-async def callback(_, query: CallbackQuery):
-    await query.answer()
-    _, platform, quality, url = query.data.split("|", 3)
-
-    status = await query.message.edit_text("⏳ đøωηℓσαđιηg ყσυя яєqυєѕт βαву… ρℓєαѕє ωαιт")
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(API + url) as r:
-            data = await r.json()
+        if data.get("statusCode") != 200:
+            return await wait.edit("❌ API error.\n Contact @candy_caugh")
 
         medias = data.get("medias", [])
         if not medias:
-            return await status.edit("❌ **Media not available**")
+            return await wait.edit("❌ Media not found....")
 
-        selected = None
+        media = medias[0]   # best / first
+        media_url = media["url"]
+        media_type = media.get("type")
+        title = data.get("title", "")
 
-        # ---------- YouTube ----------
-        if platform == "yt":
-            if quality == "mp3":
-                for m in medias:
-                    if m.get("type") == "audio":
-                        selected = m
-                        break
-            else:
-                for m in medias:
-                    q_label = m.get("quality", "") or m.get("qualityLabel", "")
-                    if m.get("type") == "video" and quality in q_label:
-                        selected = m
-                        break
+        # ---- Temp file ----
+        suffix = ".mp4" if media_type == "video" else ".jpg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = tmp.name
 
-        # ---------- Instagram / Pinterest ----------
+        # ---- Download actual media ----
+        async with aiohttp.ClientSession() as session:
+            async with session.get(media_url) as r:
+                with open(tmp_path, "wb") as f:
+                    async for chunk in r.content.iter_chunked(10240):
+                        f.write(chunk)
+
+        await wait.delete()
+
+        # ---- Send to Telegram ----
+        if media_type == "video":
+            await message.reply_video(video=tmp_path, caption=title)
         else:
-            selected = medias[0]
+            await message.reply_photo(photo=tmp_path, caption=title)
 
-        # Fallback
-        if not selected:
-            selected = medias[0]
+        os.remove(tmp_path)
 
-        file_url = selected["url"]
-        ext = selected.get("extension", "mp4")
-
-        # ---------- Download file asynchronously ----------
-        tmp_path = None
+    except Exception as e:
+        await wait.edit(f"❌ Error:\n`{e}`")        tmp_path = None
         try:
             # Create temp file
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
